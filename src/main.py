@@ -8,6 +8,12 @@ from common_py_aws import (
     SqsConsumerConfig,
     SqsConsumerService,
 )
+from src.dependencies import (
+    get_message_sanitizer,
+    get_notification_manager_service,
+    get_notification_service,
+    get_template_loader,
+)
 from src.infrastructure.broker.aws.aws_sqs_create_queues import SqsCreator
 from src.infrastructure.broker.aws.aws_sqs_publisher import SqsPublisher
 from src.infrastructure.env_manager.env_manager import EnvironmentVariablesConstants
@@ -49,11 +55,16 @@ async def lifespan(app: FastAPI):
             wait_time_seconds=int(
                 EnvironmentVariablesConstants.CONSUMER_MAX_POOL_TIMEOUT
             ),
-            is_enabled=False,
+            is_enabled=True,
             max_retries=int(EnvironmentVariablesConstants.CONSUMER_MAX_RETRIES),
             dlq_url=EnvironmentVariablesConstants.AWS_SQS_NOTIFY_DLQ_URL,
         ),
-        sqs_handler=SqsNotificatorConsumer(),
+        sqs_handler=SqsNotificatorConsumer(
+            message_sanitizer=get_message_sanitizer(),
+            notification_manager_service=get_notification_manager_service(
+                get_notification_service(), get_template_loader()
+            ),
+        ),
     )
     app.state.sqs_consumer = sqs_consumer
     sqs_consumer.start_consumer()
