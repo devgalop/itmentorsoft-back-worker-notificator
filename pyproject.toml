@@ -13,3 +13,12 @@ testpaths = ["tests"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ALL"]
 
+[tool.coverage.run]
+omit = [
+    "src/main.py",
+    "tests/*",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

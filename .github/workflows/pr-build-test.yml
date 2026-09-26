@@ -9,8 +9,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  build-and-test:
-    name: Build & Test
+  build:
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
@@ -28,64 +28,198 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests
+      - name: Verify app import
+        run: python -c "from src.main import app"
+
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
         id: tests
         run: |
           set -o pipefail
-          python -m pytest tests/ -v --tb=short 2>&1 | tee test-output.txt
+          python -m pytest tests/unit/ -v --cov=src --cov-report=term-missing --cov-fail-under=80 --tb=short 2>&1 | tee unit-test-output.txt
 
-      - name: Determine result
-        id: result
+      - name: Upload unit test results
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: unit-test-output.txt
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install dependencies
         run: |
-          if [ "${{ steps.tests.outcome }}" == "success" ]; then
-            echo "status=✅ Tests Passed" >> $GITHUB_OUTPUT
-            echo "badge_color=green" >> $GITHUB_OUTPUT
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run integration tests
+        id: tests
+        run: |
+          set -o pipefail
+          python -m pytest tests/integration/ -v --cov=src --cov-report=term-missing --cov-fail-under=80 --tb=short 2>&1 | tee integration-test-output.txt
+
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: integration-test-output.txt
+
+  report:
+    name: Report Results
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-integration]
+    if: always()
+
+    steps:
+      - name: Download unit test results
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-test-results
+        continue-on-error: true
+
+      - name: Download integration test results
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-test-results
+        continue-on-error: true
+
+      - name: Prepare report
+        id: report
+        run: |
+          # Unit tests
+          if [ -f unit-test-output.txt ]; then
+            UNIT_OUTPUT=$(cat unit-test-output.txt)
+            UNIT_STATUS="✅ Passed"
+            if echo "$UNIT_OUTPUT" | grep -q "failed"; then
+              UNIT_STATUS="❌ Failed"
+            fi
+            UNIT_SUMMARY=$(tail -1 unit-test-output.txt || echo "Could not read summary")
           else
-            echo "status=❌ Tests Failed" >> $GITHUB_OUTPUT
-            echo "badge_color=red" >> $GITHUB_OUTPUT
+            UNIT_OUTPUT="Unit test results not available"
+            UNIT_STATUS="⚠️ Skipped"
+            UNIT_SUMMARY="N/A"
           fi
 
-          # Extract summary line (e.g. "95 passed in 2.29s")
-          SUMMARY=$(tail -1 test-output.txt || echo "Could not read test output")
-          echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+          # Integration tests
+          if [ -f integration-test-output.txt ]; then
+            INTEGRATION_OUTPUT=$(cat integration-test-output.txt)
+            INTEGRATION_STATUS="✅ Passed"
+            if echo "$INTEGRATION_OUTPUT" | grep -q "failed"; then
+              INTEGRATION_STATUS="❌ Failed"
+            fi
+            INTEGRATION_SUMMARY=$(tail -1 integration-test-output.txt || echo "Could not read summary")
+          else
+            INTEGRATION_OUTPUT="Integration test results not available"
+            INTEGRATION_STATUS="⚠️ Skipped"
+            INTEGRATION_SUMMARY="N/A"
+          fi
+
+          # Save to outputs
+          {
+            echo 'unit_output<<EOF'
+            echo "$UNIT_OUTPUT"
+            echo 'EOF'
+            echo "unit_status=$UNIT_STATUS"
+            echo "unit_summary=$UNIT_SUMMARY"
+            echo 'integration_output<<EOF'
+            echo "$INTEGRATION_OUTPUT"
+            echo 'EOF'
+            echo "integration_status=$INTEGRATION_STATUS"
+            echo "integration_summary=$INTEGRATION_SUMMARY"
+          } >> $GITHUB_OUTPUT
 
       - name: Comment on PR
-        if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
-
-            const output = fs.readFileSync('test-output.txt', 'utf8');
-            const status = '${{ steps.result.outputs.status }}';
-            const summary = '${{ steps.result.outputs.summary }}';
+            const unitStatus = '${{ steps.report.outputs.unit_status }}';
+            const unitSummary = '${{ steps.report.outputs.unit_summary }}';
+            const unitOutput = `${{ steps.report.outputs.unit_output }}`;
+            
+            const integrationStatus = '${{ steps.report.outputs.integration_status }}';
+            const integrationSummary = '${{ steps.report.outputs.integration_summary }}';
+            const integrationOutput = `${{ steps.report.outputs.integration_output }}`;
+            
             const sha = context.sha.substring(0, 7);
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-
-            // Truncate output if too long (GitHub comment limit is 65536 chars)
-            const maxOutput = 30000;
-            const truncatedOutput = output.length > maxOutput
-              ? output.substring(output.length - maxOutput) + '\n\n... (output truncated)'
-              : output;
-
+            
+            const maxOutput = 15000;
+            
+            const truncateOutput = (output) => {
+              if (output.length > maxOutput) {
+                return output.substring(output.length - maxOutput) + '\n\n... (output truncated)';
+              }
+              return output;
+            };
+            
             const body = [
-              `## ${status}`,
+              '## 🧪 Test Results',
               '',
-              `**Summary:** ${summary}`,
               `**Commit:** \`${sha}\``,
               `**Workflow:** [View run](${runUrl})`,
               '',
+              '---',
+              '',
+              `### Unit Tests — ${unitStatus}`,
+              `**Summary:** ${unitSummary}`,
+              '',
               '<details>',
-              '<summary>📋 Full test output</summary>',
+              '<summary>📋 Full unit test output</summary>',
               '',
               '```',
-              truncatedOutput,
+              truncateOutput(unitOutput),
+              '```',
+              '',
+              '</details>',
+              '',
+              '---',
+              '',
+              `### Integration Tests — ${integrationStatus}`,
+              `**Summary:** ${integrationSummary}`,
+              '',
+              '<details>',
+              '<summary>📋 Full integration test output</summary>',
+              '',
+              '```',
+              truncateOutput(integrationOutput),
               '```',
               '',
               '</details>',
             ].join('\n');
-
+            
             await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
