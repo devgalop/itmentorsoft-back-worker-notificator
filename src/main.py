@@ -15,7 +15,6 @@ from src.dependencies import (
     get_template_loader,
 )
 from src.infrastructure.broker.aws.aws_sqs_create_queues import SqsCreator
-from src.infrastructure.broker.aws.aws_sqs_publisher import SqsPublisher
 from src.infrastructure.env_manager.env_manager import EnvironmentVariablesConstants
 from src.infrastructure.broker.aws.aws_sqs_notificator_consumer import (
     SqsNotificatorConsumer,
@@ -41,8 +40,6 @@ async def lifespan(app: FastAPI):
     if EnvironmentVariablesConstants.ENVIRONMENT == "dev":
         sqs_creator = SqsCreator(sqs_connection)
         sqs_creator.create_queues()
-        sqs_publisher = SqsPublisher(sqs_connection)
-        await sqs_publisher.publish_sample_messages()
     print("SQS connection established.")
 
     sqs_consumer = SqsConsumerService(
