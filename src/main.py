@@ -10,16 +10,21 @@ from common_py_aws import (
 )
 from src.dependencies import (
     get_message_sanitizer,
-    get_notification_manager_service,
     get_notification_service,
     get_template_loader,
 )
 from src.infrastructure.broker.aws.aws_sqs_create_queues import SqsCreator
+from src.infrastructure.broker.aws.aws_sqs_publisher import SqsPublisher
+from src.infrastructure.databases.postgres_notification_repository import (
+    PostgresNotificationRepository,
+)
 from src.infrastructure.env_manager.env_manager import EnvironmentVariablesConstants
 from src.infrastructure.broker.aws.aws_sqs_notificator_consumer import (
     SqsNotificatorConsumer,
 )
 from src.endpoints.init import router as endpoints_router
+from src.services.notification_manager_service import NotificationManagerService
+from itmentorsoft_persistence.mappers import NotificationMapper
 
 
 @asynccontextmanager
@@ -40,6 +45,8 @@ async def lifespan(app: FastAPI):
     if EnvironmentVariablesConstants.ENVIRONMENT == "dev":
         sqs_creator = SqsCreator(sqs_connection)
         sqs_creator.create_queues()
+        sqs_publisher = SqsPublisher(sqs_connection)
+        await sqs_publisher.publish_sample_messages()
     print("SQS connection established.")
 
     sqs_consumer = SqsConsumerService(
@@ -58,8 +65,12 @@ async def lifespan(app: FastAPI):
         ),
         sqs_handler=SqsNotificatorConsumer(
             message_sanitizer=get_message_sanitizer(),
-            notification_manager_service=get_notification_manager_service(
-                get_notification_service(), get_template_loader()
+            notification_manager_service=NotificationManagerService(
+                notify_service=get_notification_service(),
+                template_loader=get_template_loader(),
+                notification_repository_factory=lambda session: PostgresNotificationRepository(
+                    session, NotificationMapper
+                ),
             ),
         ),
     )

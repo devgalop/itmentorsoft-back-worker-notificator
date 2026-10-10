@@ -1,18 +1,30 @@
+from itmentorsoft_persistence import AsyncSessionLocal
+
 from src.contracts.notification_service import (
     NotificationConfigBuilder,
     NotificationService,
 )
 from src.models.notification_email_request import NotificationEmailRequest
+from itmentorsoft_persistence.repositories import NotificationRepository
 from src.services.template_loader import TemplateLoader
+from itmentorsoft_persistence.dto import InsertNotificationRequest
+from typing import Callable
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class NotificationManagerService:
 
     def __init__(
-        self, notify_service: NotificationService, template_loader: TemplateLoader
+        self,
+        notify_service: NotificationService,
+        template_loader: TemplateLoader,
+        notification_repository_factory: Callable[
+            [AsyncSession], NotificationRepository
+        ],
     ):
         self.notify_service = notify_service
         self.template_loader = template_loader
+        self.notification_repository_factory = notification_repository_factory
 
     async def send(self, notification_message: NotificationEmailRequest) -> bool:
         """Send a notification email based on the provided notification message.
@@ -35,6 +47,7 @@ class NotificationManagerService:
             html_content = self.replace_variables(html_content, notification_message)
             notification_builder.set_template(html_content)
             notification_config = notification_builder.build()
+            await self.insert_notification(notification_message)
             is_sent = await self.notify_service.send_notification(notification_config)
             if not is_sent:
                 print(f"Failed to send email to {notification_message.recipient}.")
@@ -60,3 +73,27 @@ class NotificationManagerService:
         for variable in notification_message.message_variables:
             html_content = html_content.replace(variable.key, variable.value)
         return html_content
+
+    def get_summary_message(self, template_code: str) -> str:
+        """Get a summary message for a given template code.
+
+        Args:
+            template_code: The template code, e.g. "recovery_password".
+
+        Returns:
+            A summary message as a string.
+        """
+        return self.template_loader.get_summary_message(template_code)
+
+    async def insert_notification(self, notification_message: NotificationEmailRequest):
+        message = self.get_summary_message(notification_message.html_template_code)
+        if not message or message.strip() == "":
+            return
+        async with AsyncSessionLocal() as session:
+            self.notification_repository = self.notification_repository_factory(session)
+            notification = InsertNotificationRequest(
+                user_id=notification_message.recipient,
+                subject=notification_message.subject,
+                message=message,
+            )
+            await self.notification_repository.create_notification(notification)

@@ -1,8 +1,7 @@
 """Integration tests for NotificationManagerService with real template loader and mocked notification service."""
 
-import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.services.notification_manager_service import NotificationManagerService
 from src.services.template_loader import TemplateLoader
@@ -28,11 +27,28 @@ def mock_notification_service():
 
 
 @pytest.fixture
-def manager(real_template_loader, mock_notification_service):
+def mock_notification_repository():
+    repo = AsyncMock()
+    repo.create_notification = AsyncMock()
+    return repo
+
+
+@pytest.fixture
+def mock_notification_repository_factory(mock_notification_repository):
+    return MagicMock(return_value=mock_notification_repository)
+
+
+@pytest.fixture
+def manager(
+    real_template_loader,
+    mock_notification_service,
+    mock_notification_repository_factory,
+):
     """NotificationManagerService wired with a real template loader and a mocked notification service."""
     return NotificationManagerService(
         notify_service=mock_notification_service,
         template_loader=real_template_loader,
+        notification_repository_factory=mock_notification_repository_factory,
     )
 
 
@@ -56,10 +72,14 @@ def _make_email_request(
 
 
 @pytest.mark.asyncio
+@patch("src.services.notification_manager_service.AsyncSessionLocal")
 async def test_send_uses_real_template_loader_with_otp_template(
-    manager, mock_notification_service
+    mock_session_local, manager, mock_notification_service
 ):
     """send() loads the otp template from the real template directory and sends it."""
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
+
     request = _make_email_request(
         html_template_code="otp",
         message_variables=[
@@ -81,8 +101,14 @@ async def test_send_uses_real_template_loader_with_otp_template(
 
 
 @pytest.mark.asyncio
-async def test_send_recover_password_template(manager, mock_notification_service):
+@patch("src.services.notification_manager_service.AsyncSessionLocal")
+async def test_send_recover_password_template(
+    mock_session_local, manager, mock_notification_service
+):
     """send() loads the recovery_password template successfully."""
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
+
     request = _make_email_request(
         html_template_code="recovery_password",
         message_variables=[
@@ -103,8 +129,14 @@ async def test_send_recover_password_template(manager, mock_notification_service
 
 
 @pytest.mark.asyncio
-async def test_send_user_created_template(manager, mock_notification_service):
+@patch("src.services.notification_manager_service.AsyncSessionLocal")
+async def test_send_user_created_template(
+    mock_session_local, manager, mock_notification_service
+):
     """send() loads the user_created template successfully."""
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
+
     request = _make_email_request(
         html_template_code="user_created",
         message_variables=[MessageVariables(key="%name%", value="John")],
@@ -117,8 +149,18 @@ async def test_send_user_created_template(manager, mock_notification_service):
 
 
 @pytest.mark.asyncio
-async def test_send_item_created_template(manager, mock_notification_service):
-    """send() loads the item_created template successfully."""
+@patch("src.services.notification_manager_service.AsyncSessionLocal")
+async def test_send_item_created_template(
+    mock_session_local,
+    manager,
+    mock_notification_service,
+    mock_notification_repository_factory,
+    mock_notification_repository,
+):
+    """send() loads the item_created template successfully and persists a notification."""
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
+
     request = _make_email_request(
         html_template_code="item_created",
         message_variables=[MessageVariables(key="%item_name%", value="Report")],
@@ -128,6 +170,9 @@ async def test_send_item_created_template(manager, mock_notification_service):
 
     assert result is True
     mock_notification_service.send_notification.assert_awaited_once()
+    # item_created has a summary message in MESSAGES, so insert_notification should be called
+    mock_notification_repository_factory.assert_called_once_with(mock_session)
+    mock_notification_repository.create_notification.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -144,10 +189,13 @@ async def test_send_template_not_found_returns_false(
 
 
 @pytest.mark.asyncio
+@patch("src.services.notification_manager_service.AsyncSessionLocal")
 async def test_send_notification_service_returns_false(
-    manager, mock_notification_service
+    mock_session_local, manager, mock_notification_service
 ):
     """send() returns False when the notification service fails to send."""
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
     mock_notification_service.send_notification = AsyncMock(return_value=False)
     request = _make_email_request()
 
@@ -157,8 +205,14 @@ async def test_send_notification_service_returns_false(
 
 
 @pytest.mark.asyncio
-async def test_send_replaces_multiple_variables(manager, mock_notification_service):
+@patch("src.services.notification_manager_service.AsyncSessionLocal")
+async def test_send_replaces_multiple_variables(
+    mock_session_local, manager, mock_notification_service
+):
     """send() replaces all message_variables in the template."""
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
+
     request = _make_email_request(
         message_variables=[
             MessageVariables(key="%USER%", value="Alice"),
@@ -177,10 +231,14 @@ async def test_send_replaces_multiple_variables(manager, mock_notification_servi
 
 
 @pytest.mark.asyncio
+@patch("src.services.notification_manager_service.AsyncSessionLocal")
 async def test_send_replaces_variables_with_empty_list(
-    manager, mock_notification_service
+    mock_session_local, manager, mock_notification_service
 ):
     """send() works when there are no variables to replace."""
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
+
     request = _make_email_request(message_variables=[])
 
     result = await manager.send(request)
@@ -224,3 +282,63 @@ def test_replace_variables_no_match_returns_original(manager):
     result = manager.replace_variables(html, request)
 
     assert result == html
+
+
+# ── New tests for get_summary_message() ──────────────────────────────────
+
+
+def test_get_summary_message_returns_real_summary_for_known_template(manager):
+    """get_summary_message() returns the real summary from MESSAGES for a known template."""
+    result = manager.get_summary_message("item_created")
+    assert result == "Un nuevo item ha sido creado."
+
+
+def test_get_summary_message_returns_empty_for_unknown_template(manager):
+    """get_summary_message() returns empty string for a template not in MESSAGES."""
+    result = manager.get_summary_message("otp")
+    assert result == ""
+
+
+def test_get_summary_message_returns_empty_for_evaluation_end(manager):
+    """get_summary_message() returns the real summary for evaluation_end template."""
+    result = manager.get_summary_message("evaluation_end")
+    assert result == "La evaluación ha sido completada."
+
+
+# ── New tests for insert_notification() ──────────────────────────────────
+
+
+@pytest.mark.asyncio
+@patch("src.services.notification_manager_service.AsyncSessionLocal")
+async def test_insert_notification_persists_notification_with_real_summary(
+    mock_session_local,
+    manager,
+    mock_notification_repository_factory,
+    mock_notification_repository,
+):
+    """insert_notification() creates a notification when the template has a real summary."""
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
+
+    request = _make_email_request(html_template_code="item_created")
+
+    await manager.insert_notification(request)
+
+    mock_notification_repository_factory.assert_called_once_with(mock_session)
+    mock_notification_repository.create_notification.assert_awaited_once()
+    call_arg = mock_notification_repository.create_notification.call_args[0][0]
+    assert call_arg.user_id == "user@example.com"
+    assert call_arg.subject == "Test Subject"
+    assert call_arg.message == "Un nuevo item ha sido creado."
+
+
+@pytest.mark.asyncio
+async def test_insert_notification_skips_when_no_summary(
+    manager, mock_notification_repository_factory
+):
+    """insert_notification() does nothing when the template has no summary message."""
+    request = _make_email_request(html_template_code="otp")
+
+    await manager.insert_notification(request)
+
+    mock_notification_repository_factory.assert_not_called()
