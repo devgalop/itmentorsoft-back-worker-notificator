@@ -1,5 +1,10 @@
 from pathlib import Path
 
+MESSAGES = [
+    {"template_name": "evaluation_end", "summary": "La evaluación ha sido completada."},
+    {"template_name": "item_created", "summary": "Un nuevo item ha sido creado."},
+]
+
 
 class TemplateLoader:
     """Loads HTML templates from the assets/templates directory."""
@@ -27,3 +32,17 @@ class TemplateLoader:
         if not template_path.exists():
             raise FileNotFoundError(f"Template not found: {template_path}")
         return template_path.read_text(encoding="utf-8")
+
+    def get_summary_message(self, template_name: str) -> str:
+        """Get a summary message for a given template.
+
+        Args:
+            template_name: The template name, e.g. "recovery_password".
+
+        Returns:
+            A summary message as a string.
+        """
+        for message in MESSAGES:
+            if message["template_name"] == template_name:
+                return message["summary"]
+        return ""

@@ -16,7 +16,7 @@ class SqsPublisher:
             NotificationMessage(
                 recipient="recipient_1@yopmail.com",
                 subject="Subject 1",
-                html_template_code="recovery_password",
+                html_template_code="evaluation_end",
                 message_variables=[
                     NotificationMessageVariables(key="%key1%", value="value1")
                 ],
@@ -32,7 +32,7 @@ class SqsPublisher:
             NotificationMessage(
                 recipient="recipient_3@yopmail.com",
                 subject="Subject 3",
-                html_template_code="user_created",
+                html_template_code="evaluation_end",
                 message_variables=[
                     NotificationMessageVariables(key="%key3%", value="value3")
                 ],
