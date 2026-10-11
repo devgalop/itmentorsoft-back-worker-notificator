@@ -22,6 +22,10 @@ class EnvironmentVariablesConstants:
         "CONSUMER_MAX_MESSAGES_PER_REQUEST",
         "CONSUMER_MAX_POOL_TIMEOUT",
         "CONSUMER_MAX_RETRIES",
+        "DATABASE_USER",
+        "DATABASE_PASSWORD",
+        "DATABASE_HOST",
+        "DATABASE_NAME",
     ]
 
     ENVIRONMENT = os.getenv("ENVIRONMENT", "")
@@ -43,6 +47,10 @@ class EnvironmentVariablesConstants:
     )
     CONSUMER_MAX_POOL_TIMEOUT = os.getenv("CONSUMER_MAX_POOL_TIMEOUT", "")
     CONSUMER_MAX_RETRIES = os.getenv("CONSUMER_MAX_RETRIES", "")
+    DATABASE_USER = os.getenv("DATABASE_USER", "")
+    DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD", "")
+    DATABASE_HOST = os.getenv("DATABASE_HOST", "")
+    DATABASE_NAME = os.getenv("DATABASE_NAME", "")
 
     @staticmethod
     def validate_mandatory_env_vars():
