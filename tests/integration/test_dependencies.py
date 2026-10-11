@@ -39,10 +39,13 @@ def test_get_notification_service_returns_concrete_instance():
 
 
 def test_get_notification_manager_service_wires_dependencies():
-    """get_notification_manager_service receives the two annotated dependencies and returns a NotificationManagerService."""
+    """get_notification_manager_service receives the three annotated dependencies and returns a NotificationManagerService."""
     notify_service = get_notification_service()
     template_loader = get_template_loader()
-    result = get_notification_manager_service(notify_service, template_loader)
+    repository_factory = lambda session: None  # mock factory for DI wiring test
+    result = get_notification_manager_service(
+        notify_service, template_loader, repository_factory
+    )
     assert isinstance(result, NotificationManagerService)
     assert result.notify_service is notify_service
     assert result.template_loader is template_loader
