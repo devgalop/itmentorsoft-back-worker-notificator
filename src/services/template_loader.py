@@ -3,6 +3,10 @@ from pathlib import Path
 MESSAGES = [
     {"template_name": "evaluation_end", "summary": "La evaluación ha sido completada."},
     {"template_name": "item_created", "summary": "Un nuevo item ha sido creado."},
+    {
+        "template_name": "recovery_password",
+        "summary": "Se ha solicitado la recuperación de contraseña.",
+    },
 ]
 
 
