@@ -79,4 +79,4 @@ watchfiles==1.2.0
 websockets==17.1
 yarl==1.24.5
 git+https://github.com/devgalop/common-py-aws.git@master
-git+https://github.com/devgalop/itmentorsoft-persistence.git@52c013be75fd9cf111093faa30020489e8b3e6c6
+git+https://github.com/devgalop/itmentorsoft-persistence.git@efff8d92a45ed3abb7074be41125ca89bcb2ded8

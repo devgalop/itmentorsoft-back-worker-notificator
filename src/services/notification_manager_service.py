@@ -89,11 +89,20 @@ class NotificationManagerService:
         message = self.get_summary_message(notification_message.html_template_code)
         if not message or message.strip() == "":
             return
+
+        url_variable = self.template_loader.get_url(
+            notification_message.html_template_code
+        )
+        if not url_variable or url_variable.strip() == "":
+            for variable in notification_message.message_variables:
+                url_variable = url_variable.replace(variable.key, variable.value)
+
         async with AsyncSessionLocal() as session:
             self.notification_repository = self.notification_repository_factory(session)
             notification = InsertNotificationRequest(
                 user_id=notification_message.recipient,
                 subject=notification_message.subject,
                 message=message,
+                url=url_variable,
             )
             await self.notification_repository.create_notification(notification)
