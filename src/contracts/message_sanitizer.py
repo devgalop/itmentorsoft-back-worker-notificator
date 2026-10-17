@@ -14,4 +14,4 @@ class MessageSanitizer(ABC):
         Returns:
             InputMessage: The sanitized message as an InputMessage instance.
         """
-        pass
+        pass  # pragma: no cover

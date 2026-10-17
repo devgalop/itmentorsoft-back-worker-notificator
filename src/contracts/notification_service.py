@@ -66,4 +66,4 @@ class NotificationService(ABC):
         Returns:
             bool: True if the notification was sent successfully, False otherwise.
         """
-        pass
+        pass  # pragma: no cover

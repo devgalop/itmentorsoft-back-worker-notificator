@@ -342,3 +342,47 @@ async def test_insert_notification_skips_when_no_summary(
     await manager.insert_notification(request)
 
     mock_notification_repository_factory.assert_not_called()
+
+
+# ── Tests for get_url() empty branch (lines 96-98) ─────────────────────
+
+
+@pytest.fixture
+def manager_with_empty_url(
+    mock_notification_service,
+    mock_notification_repository_factory,
+):
+    """NotificationManagerService with a mocked TemplateLoader that returns a summary but empty URL."""
+    mock_loader = MagicMock(spec=TemplateLoader)
+    mock_loader.get_summary_message.return_value = "A summary message."
+    mock_loader.get_url.return_value = ""
+    return NotificationManagerService(
+        notify_service=mock_notification_service,
+        template_loader=mock_loader,
+        notification_repository_factory=mock_notification_repository_factory,
+    )
+
+
+@pytest.mark.asyncio
+@patch("src.services.notification_manager_service.AsyncSessionLocal")
+async def test_insert_notification_handles_empty_url(
+    mock_session_local,
+    manager_with_empty_url,
+    mock_notification_repository_factory,
+    mock_notification_repository,
+):
+    """insert_notification() enters the empty-url branch when get_url returns empty string."""
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
+
+    request = _make_email_request(
+        html_template_code="custom_template",
+        message_variables=[
+            MessageVariables(key="%URL%", value="https://example.com"),
+        ],
+    )
+
+    await manager_with_empty_url.insert_notification(request)
+
+    mock_notification_repository_factory.assert_called_once_with(mock_session)
+    mock_notification_repository.create_notification.assert_awaited_once()

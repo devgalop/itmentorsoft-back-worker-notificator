@@ -1,11 +1,20 @@
 from pathlib import Path
 
 MESSAGES = [
-    {"template_name": "evaluation_end", "summary": "La evaluación ha sido completada."},
-    {"template_name": "item_created", "summary": "Un nuevo item ha sido creado."},
+    {
+        "template_name": "evaluation_end",
+        "summary": "La evaluación ha sido completada.",
+        "url": "%LINK_EVALUATION%",
+    },
+    {
+        "template_name": "item_created",
+        "summary": "Un nuevo item ha sido creado.",
+        "url": "%URL_REVIEW%",
+    },
     {
         "template_name": "recovery_password",
         "summary": "Se ha solicitado la recuperación de contraseña.",
+        "url": "%URL_BASE%?token=%URL_TOKEN%&trx=%ID_TRX%",
     },
 ]
 
@@ -49,4 +58,18 @@ class TemplateLoader:
         for message in MESSAGES:
             if message["template_name"] == template_name:
                 return message["summary"]
+        return ""
+
+    def get_url(self, template_name: str) -> str:
+        """Get the URL for a given template.
+
+        Args:
+            template_name: The template name, e.g. "recovery_password".
+
+        Returns:
+            The URL as a string.
+        """
+        for message in MESSAGES:
+            if message["template_name"] == template_name:
+                return message["url"]
         return ""
