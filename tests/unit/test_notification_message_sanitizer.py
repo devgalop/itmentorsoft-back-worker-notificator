@@ -50,6 +50,11 @@ class TestNotificationMessageSanitizer:
         with pytest.raises((ValueError, json.JSONDecodeError)):
             self._sanitizer().sanitize("")
 
+    def test_empty_json_object_raises_value_error(self):
+        # json.loads("{}") returns {} which is falsy, triggering the custom ValueError.
+        with pytest.raises(ValueError, match="Message content is empty"):
+            self._sanitizer().sanitize("{}")
+
     def test_missing_recipient_raises(self):
         data = json.dumps({"subject": "Hi", "html_template_code": "TPL"})
         with pytest.raises(ValueError, match="Recipient is missing"):

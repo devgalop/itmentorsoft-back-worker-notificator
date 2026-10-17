@@ -117,3 +117,17 @@ def test_load_nonexistent_real_template_raises():
     loader = TemplateLoader()
     with pytest.raises(FileNotFoundError):
         loader.load("does_not_exist_at_all")
+
+
+def test_get_url_returns_empty_for_unknown_template():
+    """get_url() returns empty string when the template is not in the MESSAGES list."""
+    loader = TemplateLoader()
+    result = loader.get_url("nonexistent_template")
+    assert result == ""
+
+
+def test_get_url_returns_url_for_known_template():
+    """get_url() returns the configured URL pattern for a known template."""
+    loader = TemplateLoader()
+    result = loader.get_url("item_created")
+    assert result == "%URL_REVIEW%"
